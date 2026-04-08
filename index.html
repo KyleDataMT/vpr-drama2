@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vanderpump Rules — Drama Map</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet">
-<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#08080e;font-family:'JetBrains Mono',monospace}</style>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#08080e;font-family:'JetBrains Mono',monospace;overflow:hidden}</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
@@ -13,7 +13,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useRef, useCallback } = React;
+const { useState, useRef, useCallback, useEffect } = React;
 
 
 const SEASONS = [
@@ -111,215 +111,258 @@ addRel("Brittany","Raquel",[null,null,null,null,null,"R","R","R",null,null,null]
 
 function getStatus(a, b, si) {
   const key = [a, b].sort().join("|");
-  const r = REL[key];
-  if (!r) return null;
-  return r.statuses[si];
+  return REL[key]?.statuses[si] ?? null;
 }
-
 function getReason(a, b, si) {
   const key = [a, b].sort().join("|");
-  const r = REL[key];
-  if (!r) return null;
-  return r.reasons[si + 1] || null;
+  return REL[key]?.reasons[si + 1] ?? null;
 }
 
-function getStats(cast, si) {
-  let feuds = 0, friends = 0;
-  for (let i = 0; i < cast.length; i++)
-    for (let j = i + 1; j < cast.length; j++) {
-      const s = getStatus(cast[i], cast[j], si);
-      if (s === "F") feuds++;
-      if (s === "R") friends++;
-    }
-  return { feuds, friends };
-}
-
-function VPRScroll() {
+function VPRWheel() {
+  const [season, setSeason] = useState(0);
   const [tooltip, setTooltip] = useState(null);
-  const pageRef = useRef(null);
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    let accum = 0;
+    const threshold = 80;
+    const handler = (e) => {
+      e.preventDefault();
+      accum += e.deltaY;
+      if (accum > threshold) {
+        setSeason(p => Math.min(10, p + 1));
+        accum = 0;
+      } else if (accum < -threshold) {
+        setSeason(p => Math.max(0, p - 1));
+        accum = 0;
+      }
+    };
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  }, []);
+
+  // Touch support
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    let startY = 0;
+    const onStart = (e) => { startY = e.touches[0].clientY; };
+    const onEnd = (e) => {
+      const diff = startY - e.changedTouches[0].clientY;
+      if (diff > 40) setSeason(p => Math.min(10, p + 1));
+      else if (diff < -40) setSeason(p => Math.max(0, p - 1));
+    };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchend", onEnd, { passive: true });
+    return () => { el.removeEventListener("touchstart", onStart); el.removeEventListener("touchend", onEnd); };
+  }, []);
 
   const handleEnter = useCallback((e, a, b, si) => {
     const status = getStatus(a, b, si);
     if (!status) return;
-    const reason = getReason(a, b, si);
     const rect = e.currentTarget.getBoundingClientRect();
-    setTooltip({ a, b, status, reason, season: SEASONS[si], x: rect.left + rect.width / 2, y: rect.top });
+    setTooltip({
+      a, b, status,
+      reason: getReason(a, b, si),
+      season: SEASONS[si],
+      x: rect.left + rect.width / 2,
+      y: rect.top,
+    });
   }, []);
 
-  const handleLeave = useCallback(() => setTooltip(null), []);
+  const s = SEASONS[season];
+  const cast = s.cast;
+  const n = cast.length;
 
-  const CELL = 44;
+  let feuds = 0, friends = 0;
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++) {
+      const st = getStatus(cast[i], cast[j], season);
+      if (st === "F") feuds++;
+      if (st === "R") friends++;
+    }
+
+  const CELL = Math.min(52, Math.floor((Math.min(720, typeof window !== "undefined" ? window.innerWidth - 120 : 600)) / n));
+  const LABEL_W = 80;
 
   return (
-    <div ref={pageRef} style={{
+    <div ref={rootRef} style={{
       background: "#08080e",
-      minHeight: "100vh",
+      height: "100vh",
+      overflow: "hidden",
       fontFamily: "'JetBrains Mono','Fira Code',monospace",
       color: "#ccc",
-      paddingBottom: 60,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      userSelect: "none",
     }}>
-      {/* Fixed header */}
-      <div style={{
-        position: "sticky", top: 0, zIndex: 50,
-        background: "#08080eee", backdropFilter: "blur(8px)",
-        borderBottom: "1px solid #1a1a2e",
-        padding: "10px 16px",
-        display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6,
-      }}>
-        <div>
-          <h1 style={{
-            margin: 0, fontSize: 15, fontWeight: 800, letterSpacing: "0.1em",
-            background: "linear-gradient(90deg,#ff4757,#ff6b81,#ffa502,#2ed573,#1e90ff,#a855f7)",
-            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-          }}>VANDERPUMP RULES — DRAMA MAP</h1>
-          <p style={{ margin: "2px 0 0", fontSize: 9, color: "#444", letterSpacing: "0.06em" }}>
-            SCROLL DOWN THROUGH 11 SEASONS · HOVER CELLS FOR DETAILS
-          </p>
+      {/* Header */}
+      <div style={{ textAlign: "center", marginBottom: 10 }}>
+        <h1 style={{
+          margin: 0, fontSize: 15, fontWeight: 800, letterSpacing: "0.1em",
+          background: "linear-gradient(90deg,#ff4757,#ff6b81,#ffa502,#2ed573,#1e90ff,#a855f7)",
+          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+        }}>VANDERPUMP RULES</h1>
+        <p style={{ margin: "2px 0 0", fontSize: 9, color: "#444", letterSpacing: "0.06em" }}>
+          SCROLL TO CHANGE SEASON · HOVER FOR DETAILS
+        </p>
+      </div>
+
+      {/* Season indicator */}
+      <div style={{ textAlign: "center", marginBottom: 8 }}>
+        {/* Season dots */}
+        <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: 8 }}>
+          {SEASONS.map((ss, i) => (
+            <div key={ss.id}
+              onClick={() => setSeason(i)}
+              style={{
+                width: i === season ? 24 : 8,
+                height: 8,
+                borderRadius: 4,
+                background: i === season ? "#fff" : "#222",
+                cursor: "pointer",
+                transition: "all 0.25s ease",
+              }}
+            />
+          ))}
         </div>
-        <div style={{ display: "flex", gap: 14, fontSize: 10 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ width: 14, height: 10, borderRadius: 2, background: "#ff4757", display: "inline-block", opacity: 0.8 }}/>FEUD
-          </span>
-          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ width: 14, height: 10, borderRadius: 2, background: "#2ed573", display: "inline-block", opacity: 0.8 }}/>GOOD
-          </span>
-          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ width: 14, height: 10, borderRadius: 2, background: "#16161e", display: "inline-block", border: "1px solid #222" }}/>N/A
-          </span>
+        <div style={{ fontSize: 28, fontWeight: 800, color: "#fff", letterSpacing: "0.04em", lineHeight: 1 }}>
+          {s.id}
+        </div>
+        <div style={{ fontSize: 11, color: "#666", marginTop: 3 }}>{s.date}</div>
+        <div style={{
+          fontSize: 11, marginTop: 2, fontStyle: "italic",
+          color: season === 9 ? "#ff4757" : "#444",
+        }}>"{s.tagline}"</div>
+        <div style={{ display: "flex", gap: 20, justifyContent: "center", marginTop: 6, fontSize: 11 }}>
+          <span><span style={{ color: "#ff4757", fontWeight: 700, fontSize: 16 }}>{feuds}</span> <span style={{ color: "#555" }}>feuds</span></span>
+          <span><span style={{ color: "#2ed573", fontWeight: 700, fontSize: 16 }}>{friends}</span> <span style={{ color: "#555" }}>friendships</span></span>
+          <span><span style={{ color: "#888", fontWeight: 700, fontSize: 16 }}>{n}</span> <span style={{ color: "#555" }}>cast</span></span>
         </div>
       </div>
 
-      {/* Seasons stacked vertically */}
-      {SEASONS.map((season, si) => {
-        const cast = season.cast;
-        const stats = getStats(cast, si);
-        const gridW = cast.length * CELL + 80;
-
-        return (
-          <div key={season.id} style={{
-            display: "flex", flexDirection: "column", alignItems: "center",
-            padding: "32px 12px 12px",
-            borderBottom: "1px solid #111",
-          }}>
-            {/* Season header */}
-            <div style={{ textAlign: "center", marginBottom: 14 }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", letterSpacing: "0.06em" }}>
-                {season.id}
+      {/* Matrix */}
+      <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+        <div style={{ display: "inline-block" }}>
+          {/* Top labels */}
+          <div style={{ display: "flex", marginLeft: LABEL_W }}>
+            {cast.map(name => (
+              <div key={name} style={{
+                width: CELL, height: 70,
+                display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 4,
+              }}>
+                <span style={{
+                  transform: "rotate(-55deg)", transformOrigin: "bottom center",
+                  fontSize: Math.min(10, CELL * 0.22), fontWeight: 700, color: COLORS[name], whiteSpace: "nowrap",
+                }}>{name}</span>
               </div>
-              <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>{season.date}</div>
-              <div style={{ fontSize: 10, color: si === 9 ? "#ff4757" : "#444", fontStyle: "italic", marginTop: 2 }}>
-                {season.tagline}
-              </div>
-              <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 6, fontSize: 10 }}>
-                <span><span style={{ color: "#ff4757", fontWeight: 700 }}>{stats.feuds}</span> <span style={{ color: "#555" }}>feuds</span></span>
-                <span><span style={{ color: "#2ed573", fontWeight: 700 }}>{stats.friends}</span> <span style={{ color: "#555" }}>friendships</span></span>
-              </div>
-            </div>
-
-            {/* Matrix */}
-            <div style={{ overflowX: "auto", maxWidth: "100%" }}>
-              <div style={{ display: "inline-block" }}>
-                {/* Top labels */}
-                <div style={{ display: "flex", marginLeft: 80 }}>
-                  {cast.map(name => (
-                    <div key={name} style={{
-                      width: CELL, height: 70,
-                      display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 4,
-                    }}>
-                      <span style={{
-                        transform: "rotate(-55deg)", transformOrigin: "bottom center",
-                        fontSize: 9, fontWeight: 700, color: COLORS[name], whiteSpace: "nowrap",
-                      }}>{name}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Rows */}
-                {cast.map((rowName, ri) => (
-                  <div key={rowName} style={{ display: "flex", height: CELL }}>
-                    <div style={{
-                      width: 80, display: "flex", alignItems: "center", justifyContent: "flex-end",
-                      paddingRight: 8, fontSize: 9, fontWeight: 700, color: COLORS[rowName],
-                    }}>{rowName}</div>
-                    {cast.map((colName, ci) => {
-                      if (ri === ci) {
-                        return (
-                          <div key={colName} style={{
-                            width: CELL, height: CELL,
-                            background: `${COLORS[rowName]}15`,
-                            border: "1px solid #141420",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                          }}>
-                            <div style={{ width: 6, height: 6, borderRadius: "50%", background: COLORS[rowName], opacity: 0.3 }}/>
-                          </div>
-                        );
-                      }
-
-                      const status = getStatus(rowName, colName, si);
-                      const reason = getReason(rowName, colName, si);
-                      const isHov = tooltip && tooltip.a === rowName && tooltip.b === colName && tooltip.season.id === season.id;
-
-                      let bg, hovBg;
-                      if (status === "F") { bg = "#ff475728"; hovBg = "#ff475755"; }
-                      else if (status === "R") { bg = "#2ed57322"; hovBg = "#2ed57348"; }
-                      else { bg = "#0c0c14"; hovBg = "#0c0c14"; }
-
-                      return (
-                        <div key={colName}
-                          onMouseEnter={e => handleEnter(e, rowName, colName, si)}
-                          onMouseLeave={handleLeave}
-                          style={{
-                            width: CELL, height: CELL,
-                            background: isHov ? hovBg : bg,
-                            border: `1px solid ${isHov && status ? (status === "F" ? "#ff475588" : "#2ed57388") : "#141420"}`,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            cursor: status ? "pointer" : "default",
-                            transition: "background 0.12s, border-color 0.12s",
-                            position: "relative",
-                          }}
-                        >
-                          {status === "F" && (
-                            <div style={{
-                              width: "62%", height: "62%", borderRadius: 3,
-                              background: isHov ? "linear-gradient(135deg,#ff4757,#c0392b)" : "linear-gradient(135deg,#ff475799,#c0392b77)",
-                              transition: "background 0.12s",
-                            }}/>
-                          )}
-                          {status === "R" && (
-                            <div style={{
-                              width: "62%", height: "62%", borderRadius: 3,
-                              background: isHov ? "linear-gradient(135deg,#2ed573,#1abc9c)" : "linear-gradient(135deg,#2ed57377,#1abc9c66)",
-                              transition: "background 0.12s",
-                            }}/>
-                          )}
-                          {!status && (
-                            <div style={{ width: 3, height: 3, borderRadius: "50%", background: "#1a1a25" }}/>
-                          )}
-                          {reason && (
-                            <span style={{
-                              position: "absolute", top: 1, right: 2,
-                              fontSize: 5, color: status === "F" ? "#ff4757" : "#2ed573", opacity: 0.8,
-                            }}>◆</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
+            ))}
           </div>
-        );
-      })}
+
+          {/* Grid */}
+          {cast.map((rowName, ri) => (
+            <div key={rowName} style={{ display: "flex", height: CELL }}>
+              <div style={{
+                width: LABEL_W, display: "flex", alignItems: "center", justifyContent: "flex-end",
+                paddingRight: 8, fontSize: Math.min(10, CELL * 0.22), fontWeight: 700, color: COLORS[rowName],
+              }}>{rowName}</div>
+              {cast.map((colName, ci) => {
+                if (ri === ci) {
+                  return (
+                    <div key={colName} style={{
+                      width: CELL, height: CELL,
+                      background: `${COLORS[rowName]}15`,
+                      border: "1px solid #141420",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: COLORS[rowName], opacity: 0.25 }}/>
+                    </div>
+                  );
+                }
+
+                const status = getStatus(rowName, colName, season);
+                const reason = getReason(rowName, colName, season);
+                const isHov = tooltip && tooltip.a === rowName && tooltip.b === colName;
+
+                let bg, hovBg;
+                if (status === "F") { bg = "#ff475728"; hovBg = "#ff475755"; }
+                else if (status === "R") { bg = "#2ed57322"; hovBg = "#2ed57348"; }
+                else { bg = "#0c0c14"; hovBg = "#0c0c14"; }
+
+                return (
+                  <div key={colName}
+                    onMouseEnter={e => handleEnter(e, rowName, colName, season)}
+                    onMouseLeave={() => setTooltip(null)}
+                    style={{
+                      width: CELL, height: CELL,
+                      background: isHov ? hovBg : bg,
+                      border: `1px solid ${isHov && status ? (status === "F" ? "#ff475588" : "#2ed57388") : "#141420"}`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      cursor: status ? "pointer" : "default",
+                      transition: "background 0.15s, border-color 0.15s",
+                      position: "relative",
+                    }}
+                  >
+                    {status === "F" && (
+                      <div style={{
+                        width: "62%", height: "62%", borderRadius: 3,
+                        background: isHov ? "linear-gradient(135deg,#ff4757,#c0392b)" : "linear-gradient(135deg,#ff475799,#c0392b77)",
+                        transition: "background 0.15s",
+                      }}/>
+                    )}
+                    {status === "R" && (
+                      <div style={{
+                        width: "62%", height: "62%", borderRadius: 3,
+                        background: isHov ? "linear-gradient(135deg,#2ed573,#1abc9c)" : "linear-gradient(135deg,#2ed57377,#1abc9c66)",
+                        transition: "background 0.15s",
+                      }}/>
+                    )}
+                    {!status && (
+                      <div style={{ width: 3, height: 3, borderRadius: "50%", background: "#1a1a25" }}/>
+                    )}
+                    {reason && (
+                      <span style={{
+                        position: "absolute", top: 1, right: 2,
+                        fontSize: 5, color: status === "F" ? "#ff4757" : "#2ed573", opacity: 0.8,
+                      }}>◆</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: "flex", gap: 14, fontSize: 10, marginTop: 10, color: "#555" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ width: 12, height: 10, borderRadius: 2, background: "#ff4757", display: "inline-block", opacity: 0.7 }}/>FEUD
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ width: 12, height: 10, borderRadius: 2, background: "#2ed573", display: "inline-block", opacity: 0.7 }}/>GOOD
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ width: 12, height: 10, borderRadius: 2, background: "#16161e", display: "inline-block", border: "1px solid #222" }}/>N/A
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ fontSize: 8, color: "#2ed573" }}>◆</span> EVENT
+        </span>
+      </div>
+      <p style={{ fontSize: 8, color: "#2a2a3a", marginTop: 4 }}>↑ SCROLL UP FOR EARLIER · SCROLL DOWN FOR LATER ↓</p>
 
       {/* Tooltip */}
       {tooltip && (
         <div style={{
           position: "fixed",
           left: Math.max(16, Math.min(tooltip.x, typeof window !== "undefined" ? window.innerWidth - 300 : 400)),
-          top: tooltip.y - 8,
+          top: tooltip.y - 10,
           transform: "translate(-50%, -100%)",
-          background: "#1a1a2e",
+          background: "#1a1a2eee",
           border: `1px solid ${tooltip.status === "F" ? "#ff475766" : "#2ed57366"}`,
           borderRadius: 8,
           padding: "10px 14px",
@@ -330,7 +373,7 @@ function VPRScroll() {
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
             <span style={{ fontWeight: 800, color: COLORS[tooltip.a], fontSize: 12 }}>{tooltip.a}</span>
-            <span style={{ color: "#444", fontSize: 10 }}>×</span>
+            <span style={{ color: "#444" }}>×</span>
             <span style={{ fontWeight: 800, color: COLORS[tooltip.b], fontSize: 12 }}>{tooltip.b}</span>
             <span style={{
               marginLeft: "auto", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
@@ -357,7 +400,7 @@ function VPRScroll() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<VPRScroll />);
+ReactDOM.createRoot(document.getElementById("root")).render(<VPRWheel />);
 </script>
 </body>
 </html>
