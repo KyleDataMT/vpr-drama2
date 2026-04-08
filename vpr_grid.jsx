@@ -1,0 +1,388 @@
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+
+const SEASONS = [
+  { id: "S1", date: "Jan 2013", tagline: "The Beginning" },
+  { id: "S2", date: "Nov 2013", tagline: "Betrayals Surface" },
+  { id: "S3", date: "Nov 2014", tagline: "Stassi Returns" },
+  { id: "S4", date: "Nov 2015", tagline: "New Blood" },
+  { id: "S5", date: "Nov 2016", tagline: "Witches of WeHo" },
+  { id: "S6", date: "Dec 2017", tagline: "Faith & Fallout" },
+  { id: "S7", date: "Dec 2018", tagline: "Cracks Form" },
+  { id: "S8", date: "Jan 2020", tagline: "The Last Stand" },
+  { id: "S9", date: "Sep 2021", tagline: "Post-Firings" },
+  { id: "S10", date: "Feb 2023", tagline: "SCANDOVAL" },
+  { id: "S11", date: "Jan 2024", tagline: "Aftermath" },
+];
+
+const ALL_CAST = ["Stassi","Jax","Kristen","Sandoval","Katie","Scheana","Schwartz","Ariana","James","Lala","Brittany","Raquel"];
+
+const COLORS = {
+  Stassi: "#e84393", Jax: "#d63031", Kristen: "#a855f7", Sandoval: "#3b82f6",
+  Katie: "#10b981", Scheana: "#f59e0b", Schwartz: "#8b5cf6", Ariana: "#06b6d4",
+  James: "#f97316", Lala: "#ec4899", Brittany: "#fb923c", Raquel: "#94a3b8",
+};
+
+const REL = {};
+function addRel(p1, p2, statuses, reasons) {
+  const key = [p1, p2].sort().join("|");
+  REL[key] = { p1, p2, statuses, reasons: reasons || {} };
+}
+
+addRel("Stassi","Scheana",["F","F","R",null,"F","R","R","R",null,null,null],{1:"Stassi labeled Scheana a homewrecker over Eddie Cibrian affair",2:"Stassi caught Scheana flirting with Jax at Gay Pride",3:"Brief truce — attended Scheana's wedding to Mike Shay",5:"Power dynamics tension as Stassi returned from NYC",6:"Gradually warmed up; bonded over motherhood later"});
+addRel("Stassi","Jax",["F","F","F","R","R","R","R","R",null,null,null],{1:"Jax cheated in Vegas & got another woman pregnant — confessed in finale",2:"Jax slept with Kristen — Stassi's best friend",4:"Rebuilt friendship after Jax started dating Brittany",7:"Solid; attended each other's major events"});
+addRel("Stassi","Kristen",["R","F","F","R","R","R","F","F",null,null,null],{1:"Best friends — part of original SUR trio with Katie",2:"Kristen slept with Jax; Stassi slapped her on camera",4:"Reconciled — formed Witches of WeHo with Katie",7:"Stassi & Katie frustrated with Kristen's toxic relationship with Carter"});
+addRel("Stassi","Katie",["R","F","F","R","R","R","R","R",null,null,null],{1:"Best friends from the start",2:"Stassi ghosted everyone when she left for NYC",4:"Rebuilt — became inseparable; Witches of WeHo"});
+addRel("Stassi","Sandoval",["R","R","R","R","R","R","R","F",null,null,null],{8:"Sandoval had outburst over Stassi's book launch event; grilled at reunion"});
+addRel("Stassi","Schwartz",["R","R","R","R","R","R","R","R",null,null,null],{});
+addRel("Stassi","Ariana",[null,"F","F","F","F","R","R","R",null,null,null],{2:"Personality clash — Stassi felt Ariana was smug & condescending",6:"Threw joint birthday parties; genuine friendship formed"});
+addRel("Stassi","James",[null,null,null,"F","F","F","F","F",null,null,null],{4:"General disdain; Stassi dismissed James as immature"});
+addRel("Stassi","Lala",[null,null,null,"F","F","R","R","R",null,null,null],{4:"Joined the women's campaign against Lala",6:"Became close friends; both pregnant at same time in 2020"});
+addRel("Stassi","Brittany",[null,null,null,"R","R","R","R","R",null,null,null],{4:"Close friends from the start; pregnant at same time 2020"});
+addRel("Stassi","Raquel",[null,null,null,null,null,"R","R","R",null,null,null],{});
+
+addRel("Jax","Sandoval",["R","F","F","R","R","R","F","F",null,null,null],{1:"Best friends at start of show",2:"Jax slept with Kristen — Sandoval's girlfriend. Massive betrayal",4:"Slowly rebuilt the bromance over time",7:"Jax didn't pick Sandoval as best man — growing apart",8:"Called it a friendship-ending feud at S8 reunion"});
+addRel("Jax","Schwartz",["R","R","R","R","R","R","R","R",null,null,null],{1:"Consistently close throughout; Schwartz stayed neutral in drama"});
+addRel("Jax","Kristen",["R","F","F","R","R","R","R","R",null,null,null],{1:"Friends at start",2:"Hookup with Kristen exposed — both lost multiple friendships",4:"Rebuilt over time once dust settled"});
+addRel("Jax","Katie",["R","R","R","R","R","R","R","R",null,null,null],{});
+addRel("Jax","Scheana",["R","R","R","R","R","R","R","F",null,null,null],{8:"Scheana and Charli accused Jax of bullying new SUR employees at reunion"});
+addRel("Jax","Ariana",[null,"R","R","R","R","R","R","R",null,null,null],{});
+addRel("Jax","James",[null,null,null,"F","R","F","F","F",null,null,null],{4:"Constant insults and age-gap clashing",5:"Surprise bonding at S5 reunion — James' humor won Jax over",6:"Right back to feuding; Jax bullied James"});
+addRel("Jax","Lala",[null,null,null,"R","R","R","R","R",null,null,null],{});
+addRel("Jax","Brittany",[null,null,null,"R","R","F","R","R",null,null,null],{6:"Jax cheated on Brittany with Faith Stowers — nearly ended them",7:"Brittany stayed; married in Kentucky June 2019"});
+addRel("Jax","Raquel",[null,null,null,null,null,"R","R","R",null,null,null],{});
+
+addRel("Kristen","Sandoval",["R","F","F","F","R","R","R","R",null,null,null],{1:"Dating at start of show (toxic relationship)",2:"Breakup — mutual cheating; both slept with other people",3:"Kristen launched Miami girl scheme to sabotage Sandoval & Ariana",5:"Finally cordial after years of war"});
+addRel("Kristen","Katie",["R","R","R","R","R","R","F","F",null,null,null],{1:"Part of the original friend trio",7:"Katie frustrated with Kristen's relationship with Carter; Witches of WeHo dissolved"});
+addRel("Kristen","Schwartz",["R","R","R","R","R","R","R","R",null,null,null],{});
+addRel("Kristen","Scheana",["R","R","R","R","R","R","R","R",null,null,null],{});
+addRel("Kristen","Ariana",[null,"F","F","F","F","R","R","R",null,null,null],{2:"Resented Ariana for dating Sandoval immediately after their breakup",3:"Orchestrated Miami girl scheme to break up Sandoval & Ariana",6:"Became genuine friends — Kristen publicly supported Ariana during Scandoval"});
+addRel("Kristen","James",[null,null,"R","F","F","F","F","F",null,null,null],{3:"Started dating — James was new British busboy at SUR",4:"Toxic breakup; cheating on both sides; years of on/off fighting"});
+addRel("Kristen","Lala",[null,null,null,"R","R","R","R","R",null,null,null],{});
+addRel("Kristen","Brittany",[null,null,null,"R","F","R","R","R",null,null,null],{5:"Brittany angry with Kristen at reunion over hookup rumors",6:"Made up and stayed friends"});
+addRel("Kristen","Raquel",[null,null,null,null,null,"R","R","R",null,null,null],{});
+
+addRel("Sandoval","Katie",["R","R","R","R","F","R","F","F","F","F","F"],{5:"Business tension — Katie felt Sandoval undercut Schwartz in TomTom deals",6:"Brief truce for TomTom bar opening",7:"Escalating — Katie felt he chronically disrespected Schwartz",10:"Katie blamed Sandoval for the downfall of her marriage to Schwartz"});
+addRel("Sandoval","Schwartz",["R","R","R","R","R","R","R","R","R","R","F"],{1:"Inseparable bromance — eventually TomTom & Schwartz & Sandy's business partners",11:"Schwartz accused of knowing about Scandoval affair; friendship badly strained"});
+addRel("Sandoval","Scheana",["R","R","R","R","R","R","R","R","R","F","F"],{10:"Scheana sided with Ariana post-Scandoval; allegedly punched Raquel"});
+addRel("Sandoval","Ariana",[null,"R","R","R","R","R","R","R","R","F","F"],{2:"Started dating — would last 9 years",10:"SCANDOVAL — Ariana discovered Sandoval's 7-month affair with Raquel via phone video"});
+addRel("Sandoval","James",[null,null,"R","R","R","R","R","R","R","F","F"],{10:"Raquel was James' ex-fiancée — felt like a double betrayal"});
+addRel("Sandoval","Lala",[null,null,null,"R","R","R","R","R","R","F","R"],{10:"Lala sided with Ariana immediately post-Scandoval",11:"Lala softened toward Sandoval; told Ariana to move on — caused rift with other women"});
+addRel("Sandoval","Brittany",[null,null,null,"R","R","R","R","R",null,null,null],{});
+addRel("Sandoval","Raquel",[null,null,null,null,null,"R","R","R","R","F",null],{10:"Affair exposed — went from cast friend to pariah overnight"});
+
+addRel("Katie","Schwartz",["R","R","F","R","R","R","R","R","R","F","F"],{1:"Dating from before the show started",3:"Schwartz admitted to cheating on Katie; she gave him an ultimatum",4:"Engaged — Schwartz proposed",5:"Married in woodsy wedding officiated by Lisa Vanderpump",10:"Divorced March 2022; Schwartz then kissed Raquel at Scheana's wedding"});
+addRel("Katie","Scheana",["R","F","R","R","F","R","R","R","R","R","R"],{2:"Jax spread motorboating rumor he heard from Scheana — Katie was furious",5:"Reunion confrontation over loyalty issues",6:"Stable friendship from here on; bonded as mothers"});
+addRel("Katie","Ariana",[null,"R","R","R","R","R","R","R","R","R","R"],{2:"Steady growing friendship throughout the entire show",9:"Co-opened Something About Her sandwich shop together"});
+addRel("Katie","James",[null,null,null,"F","F","F","F","R","R","R","R"],{4:"James body-shamed Katie on camera; she got him fired from his SUR DJ gig",8:"Slowly warmed up after James got sober; mutual respect grew"});
+addRel("Katie","Lala",[null,null,null,"F","F","R","R","R","R","R","F"],{4:"Katie led the women against Lala; mean texts in group chat; body-shaming drama",6:"Became close friends after Lala returned to the show",11:"Verbal battles — Lala challenged Katie's authenticity about feelings toward Ariana"});
+addRel("Katie","Brittany",[null,null,null,"R","R","R","R","R",null,null,null],{4:"Close friends throughout; eventually Valley neighbors"});
+addRel("Katie","Raquel",[null,null,null,null,null,"R","R","R","R","F",null],{10:"Raquel kissed Katie's ex Schwartz at Scheana's wedding → Katie furious → then Scandoval made it worse"});
+
+addRel("Scheana","Schwartz",["R","R","R","R","R","R","R","R","R","R","R"],{11:"Secret Vegas makeout between them revealed at S11 reunion"});
+addRel("Scheana","Ariana",["R","R","R","R","F","R","R","R","R","R","F"],{1:"Best friends — Ariana was Scheana's backup dancer",5:"First big falling out — Scheana's infamous 'sketch comedy' remark",6:"Rebuilt their best friendship",11:"Ariana upset that Scheana couldn't fully cut ties with Sandoval; tense reunion"});
+addRel("Scheana","James",[null,null,"R","R","R","R","R","R","R","R","R"],{3:"Generally friendly throughout — Scheana tried to help expose his cheating for Raquel"});
+addRel("Scheana","Lala",[null,null,null,"F","F","R","R","R","F","R","R"],{4:"Part of the group against Lala initially",6:"Became real friends when Lala returned",9:"Public feud — Scheana wasn't invited to Lala's gender reveal party",10:"Mended the friendship",11:"Bonded deeply as single mothers; aligned in views on Sandoval"});
+addRel("Scheana","Brittany",[null,null,null,"R","R","R","R","R",null,null,null],{4:"Close friends; both pregnant at same time in 2020"});
+addRel("Scheana","Raquel",[null,null,null,null,null,"R","R","R","R","F",null],{10:"Scheana allegedly punched Raquel after learning of the affair; Raquel filed a TRO"});
+
+addRel("Schwartz","Ariana",[null,"R","R","R","R","R","R","R","R","R","F"],{3:"Good friends — Ariana served as groomsman at Schwartz & Katie's wedding",11:"Ariana cut contact with Schwartz; accused him of knowing about the Scandoval affair"});
+addRel("Schwartz","James",[null,null,"R","R","R","R","R","R","R","R","R"],{});
+addRel("Schwartz","Lala",[null,null,null,null,null,"R","R","R","R","R","R"],{11:"Formed an unlikely close friendship nobody saw coming"});
+addRel("Schwartz","Brittany",[null,null,null,"R","R","R","R","R",null,null,null],{});
+addRel("Schwartz","Raquel",[null,null,null,null,null,"R","R","R","R","R",null],{10:"Kissed Raquel at Scheana's wedding; brief flirtation that infuriated Katie"});
+
+addRel("Ariana","James",[null,null,"R","R","R","R","R","R","R","R","R"],{3:"Friendly throughout — natural allies in the group"});
+addRel("Ariana","Lala",[null,null,null,"R","R","R","R","R","F","F","F"],{4:"Ariana was the first person to welcome and befriend Lala at SUR",9:"Lala questioned Ariana's loyalty; fiery confrontation at Scheana's birthday party",11:"Lala told Ariana to move past her rage toward Sandoval — major rift"});
+addRel("Ariana","Brittany",[null,null,null,"R","R","R","R","R",null,null,null],{});
+addRel("Ariana","Raquel",[null,null,null,null,null,"R","R","R","R","F",null],{6:"Ariana defended Raquel as 'kind, sweet, loyal, and a delight'",10:"Raquel had a 7-month affair with Ariana's boyfriend Sandoval — ultimate betrayal"});
+
+addRel("James","Lala",[null,null,null,"R","R","F","R","R","R","R","R"],{4:"Music collaborations & hooked up early on",6:"Friendship eroded — body-shaming accusations both directions",7:"Rebuilt friendship during James' sobriety journey; genuine support"});
+addRel("James","Brittany",[null,null,null,"R","R","R","R","R",null,null,null],{});
+addRel("James","Raquel",[null,null,null,null,"R","R","R","R","F","F",null],{5:"Started dating — would last 5 years",9:"Engagement broken at S9 reunion on camera",10:"Raquel's affair with Sandoval — double betrayal since she was James' ex"});
+
+addRel("Lala","Brittany",[null,null,null,null,null,"R","R","R",null,null,null],{6:"Became close; both pregnant at same time 2020"});
+addRel("Lala","Raquel",[null,null,null,null,null,"R","R","R","R","F",null],{10:"Lala sided firmly with Ariana post-Scandoval"});
+
+addRel("Brittany","Raquel",[null,null,null,null,null,"R","R","R",null,null,null],{});
+
+// Build pairs list
+const PAIRS = [];
+for (let i = 0; i < ALL_CAST.length; i++) {
+  for (let j = i + 1; j < ALL_CAST.length; j++) {
+    const key = [ALL_CAST[i], ALL_CAST[j]].sort().join("|");
+    if (REL[key]) {
+      PAIRS.push({ p1: ALL_CAST[i], p2: ALL_CAST[j], key });
+    }
+  }
+}
+
+const CELL_W = 88;
+const CELL_H = 38;
+const LABEL_W = 155;
+const HEADER_H = 58;
+
+export default function VPRGrid() {
+  const [tooltip, setTooltip] = useState(null);
+  const [filterPerson, setFilterPerson] = useState(null);
+  const containerRef = useRef(null);
+  const tooltipRef = useRef(null);
+
+  const filteredPairs = useMemo(() => {
+    if (!filterPerson) return PAIRS;
+    return PAIRS.filter(p => p.p1 === filterPerson || p.p2 === filterPerson);
+  }, [filterPerson]);
+
+  const handleMouseEnter = useCallback((e, pair, si) => {
+    const rel = REL[pair.key];
+    const status = rel.statuses[si];
+    if (!status) return;
+    const reason = rel.reasons[si + 1] || null;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    setTooltip({
+      p1: pair.p1,
+      p2: pair.p2,
+      status,
+      reason,
+      season: SEASONS[si],
+      x: rect.left + rect.width / 2 - (containerRect?.left || 0),
+      y: rect.top - (containerRect?.top || 0) - 8,
+    });
+  }, []);
+
+  const handleMouseLeave = useCallback(() => setTooltip(null), []);
+
+  return (
+    <div ref={containerRef} style={{
+      background: "#08080e",
+      minHeight: "100vh",
+      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+      color: "#ccc",
+      display: "flex",
+      flexDirection: "column",
+      position: "relative",
+    }}>
+      {/* Sticky header bar */}
+      <div style={{
+        padding: "12px 16px 8px",
+        borderBottom: "1px solid #1a1a2e",
+        background: "#08080e",
+        zIndex: 20,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+        gap: 8,
+      }}>
+        <div>
+          <h1 style={{
+            margin: 0, fontSize: 15, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase",
+            background: "linear-gradient(90deg, #ff4757, #ff6b81, #ffa502, #2ed573, #1e90ff, #a855f7)",
+            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+          }}>
+            VANDERPUMP RULES — DRAMA MAP
+          </h1>
+          <p style={{ margin: "2px 0 0", fontSize: 9, color: "#444", letterSpacing: "0.06em" }}>
+            SCROLL TO EXPLORE · HOVER FOR DETAILS · CLICK NAMES TO FILTER
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 14, fontSize: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ width: 14, height: 10, borderRadius: 2, background: "#ff4757", display: "inline-block", opacity: 0.8 }}/>FEUD
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ width: 14, height: 10, borderRadius: 2, background: "#2ed573", display: "inline-block", opacity: 0.8 }}/>GOOD
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ width: 14, height: 10, borderRadius: 2, background: "#16161e", display: "inline-block", border: "1px solid #222" }}/>N/A
+          </span>
+          {filterPerson && (
+            <button onClick={() => setFilterPerson(null)} style={{
+              background: "#1a1a2e", border: "1px solid #333", color: "#ccc",
+              padding: "2px 10px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontFamily: "inherit",
+            }}>✕ {filterPerson}</button>
+          )}
+        </div>
+      </div>
+
+      {/* Scrollable grid area */}
+      <div style={{ flex: 1, overflow: "auto", position: "relative" }}>
+        <div style={{ display: "inline-flex", flexDirection: "column", minWidth: "100%" }}>
+          {/* Column headers — season labels */}
+          <div style={{
+            display: "flex",
+            position: "sticky",
+            top: 0,
+            zIndex: 15,
+            background: "#08080e",
+            borderBottom: "1px solid #1a1a2e",
+          }}>
+            {/* Corner */}
+            <div style={{
+              minWidth: LABEL_W, height: HEADER_H,
+              position: "sticky", left: 0, zIndex: 16,
+              background: "#08080e",
+              display: "flex", alignItems: "flex-end", justifyContent: "flex-end",
+              paddingRight: 8, paddingBottom: 6,
+              fontSize: 9, color: "#333", borderRight: "1px solid #1a1a2e",
+            }}>
+              PAIR ↓ &nbsp; SEASON →
+            </div>
+            {SEASONS.map((s, i) => (
+              <div key={s.id} style={{
+                minWidth: CELL_W, height: HEADER_H,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end",
+                paddingBottom: 6, gap: 2,
+                borderLeft: "1px solid #111",
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: "#ddd" }}>{s.id}</span>
+                <span style={{ fontSize: 8, color: "#555" }}>{s.date}</span>
+                <span style={{ fontSize: 7, color: "#333", fontStyle: "italic" }}>{s.tagline}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Rows — each pair */}
+          {filteredPairs.map((pair, pi) => {
+            const rel = REL[pair.key];
+            return (
+              <div key={pair.key} style={{
+                display: "flex",
+                borderBottom: "1px solid #0f0f18",
+                background: pi % 2 === 0 ? "transparent" : "#0a0a12",
+              }}>
+                {/* Sticky pair label */}
+                <div style={{
+                  minWidth: LABEL_W, height: CELL_H,
+                  position: "sticky", left: 0, zIndex: 10,
+                  background: pi % 2 === 0 ? "#08080e" : "#0a0a12",
+                  display: "flex", alignItems: "center",
+                  paddingLeft: 10, paddingRight: 8, gap: 4,
+                  borderRight: "1px solid #1a1a2e",
+                  fontSize: 10,
+                }}>
+                  <span
+                    style={{ color: COLORS[pair.p1], fontWeight: 700, cursor: "pointer" }}
+                    onClick={() => setFilterPerson(filterPerson === pair.p1 ? null : pair.p1)}
+                  >{pair.p1}</span>
+                  <span style={{ color: "#333" }}>×</span>
+                  <span
+                    style={{ color: COLORS[pair.p2], fontWeight: 700, cursor: "pointer" }}
+                    onClick={() => setFilterPerson(filterPerson === pair.p2 ? null : pair.p2)}
+                  >{pair.p2}</span>
+                </div>
+
+                {/* Season cells */}
+                {SEASONS.map((s, si) => {
+                  const status = rel.statuses[si];
+                  const reason = rel.reasons[si + 1];
+                  const isHov = tooltip && tooltip.p1 === pair.p1 && tooltip.p2 === pair.p2 && tooltip.season.id === s.id;
+
+                  let bg, hoverBg;
+                  if (status === "F") {
+                    bg = "#ff475730"; hoverBg = "#ff475755";
+                  } else if (status === "R") {
+                    bg = "#2ed57325"; hoverBg = "#2ed57348";
+                  } else {
+                    bg = "transparent"; hoverBg = "transparent";
+                  }
+
+                  return (
+                    <div
+                      key={si}
+                      onMouseEnter={(e) => handleMouseEnter(e, pair, si)}
+                      onMouseLeave={handleMouseLeave}
+                      style={{
+                        minWidth: CELL_W, height: CELL_H,
+                        background: isHov ? hoverBg : bg,
+                        borderLeft: "1px solid #0e0e16",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        cursor: status ? "pointer" : "default",
+                        transition: "background 0.12s",
+                        position: "relative",
+                      }}
+                    >
+                      {status === "F" && (
+                        <div style={{
+                          width: "75%", height: "55%", borderRadius: 3,
+                          background: isHov
+                            ? "linear-gradient(135deg, #ff4757, #c0392b)"
+                            : "linear-gradient(135deg, #ff475799, #c0392b88)",
+                          transition: "background 0.12s",
+                        }}/>
+                      )}
+                      {status === "R" && (
+                        <div style={{
+                          width: "75%", height: "55%", borderRadius: 3,
+                          background: isHov
+                            ? "linear-gradient(135deg, #2ed573, #1abc9c)"
+                            : "linear-gradient(135deg, #2ed57388, #1abc9c77)",
+                          transition: "background 0.12s",
+                        }}/>
+                      )}
+                      {!status && (
+                        <div style={{ width: 3, height: 3, borderRadius: "50%", background: "#1a1a25" }}/>
+                      )}
+                      {reason && (
+                        <span style={{
+                          position: "absolute", top: 2, right: 4,
+                          fontSize: 6, color: status === "F" ? "#ff4757" : "#2ed573", opacity: 0.7,
+                        }}>◆</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Tooltip */}
+        {tooltip && (
+          <div ref={tooltipRef} style={{
+            position: "fixed",
+            left: Math.min(tooltip.x + (containerRef.current?.getBoundingClientRect().left || 0), typeof window !== 'undefined' ? window.innerWidth - 340 : 400),
+            top: tooltip.y + (containerRef.current?.getBoundingClientRect().top || 0) - 4,
+            transform: "translate(-50%, -100%)",
+            background: "#1a1a2e",
+            border: `1px solid ${tooltip.status === "F" ? "#ff475766" : "#2ed57366"}`,
+            borderRadius: 6,
+            padding: "8px 12px",
+            maxWidth: 320,
+            zIndex: 100,
+            pointerEvents: "none",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <span style={{ fontWeight: 800, color: COLORS[tooltip.p1], fontSize: 11 }}>{tooltip.p1}</span>
+              <span style={{ color: "#444", fontSize: 10 }}>×</span>
+              <span style={{ fontWeight: 800, color: COLORS[tooltip.p2], fontSize: 11 }}>{tooltip.p2}</span>
+              <span style={{
+                marginLeft: "auto", fontSize: 9, fontWeight: 700,
+                color: tooltip.status === "F" ? "#ff4757" : "#2ed573",
+                textTransform: "uppercase", letterSpacing: "0.06em",
+              }}>
+                {tooltip.status === "F" ? "FEUD" : "GOOD TERMS"}
+              </span>
+            </div>
+            <div style={{ fontSize: 9, color: "#666", marginBottom: tooltip.reason ? 4 : 0 }}>
+              {tooltip.season.id} · {tooltip.season.date} · {tooltip.season.tagline}
+            </div>
+            {tooltip.reason && (
+              <div style={{ fontSize: 10, color: "#bbb", lineHeight: 1.4 }}>
+                {tooltip.reason}
+              </div>
+            )}
+            {/* Arrow */}
+            <div style={{
+              position: "absolute", bottom: -5, left: "50%", transform: "translateX(-50%)",
+              width: 0, height: 0,
+              borderLeft: "5px solid transparent", borderRight: "5px solid transparent",
+              borderTop: `5px solid ${tooltip.status === "F" ? "#ff475766" : "#2ed57366"}`,
+            }}/>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
